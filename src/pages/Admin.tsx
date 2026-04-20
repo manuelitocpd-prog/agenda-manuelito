@@ -78,7 +78,7 @@ const Admin = () => {
       toast.error("Erro ao carregar agendas");
       return;
     }
-    setAgendas((data ?? []) as AgendaRow[]);
+    setAgendas((data ?? []) as unknown as AgendaRow[]);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
