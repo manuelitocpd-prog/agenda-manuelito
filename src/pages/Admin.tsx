@@ -96,7 +96,8 @@ const Admin = () => {
   };
 
   const baixar = async (a: AgendaRow) => {
-    const doc = await gerarPdfAgenda({ turmaNome: a.turma, blocos: a.blocos });
+    const blocos = (a.blocos as unknown as unknown[]).map(normalizarBloco);
+    const doc = await gerarPdfAgenda({ turmaNome: a.turma, blocos });
     doc.save(`agenda-${a.turma}-${a.semana_inicio}.pdf`);
   };
 
