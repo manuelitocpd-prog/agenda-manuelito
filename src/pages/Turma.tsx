@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronUp, Eye, Send } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Eye, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/logo-colorida.png";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DIAS_SEMANA, blocoEstaVazio, blocoVazio, getTurma, type Bloco } from "@/lib/turmas";
+import {
+  DIAS_SEMANA,
+  blocoEstaVazio,
+  blocoVazio,
+  disciplinaEstaVazia,
+  disciplinaVazia,
+  getTurma,
+  type Bloco,
+  type Disciplina,
+} from "@/lib/turmas";
 import { gerarPdfAgenda } from "@/lib/pdf";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -38,6 +47,30 @@ const Turma = () => {
 
   const updateBloco = (idx: number, patch: Partial<Bloco>) => {
     setBlocos((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
+  };
+
+  const updateDisciplina = (bIdx: number, dIdx: number, patch: Partial<Disciplina>) => {
+    setBlocos((prev) =>
+      prev.map((b, i) =>
+        i === bIdx
+          ? { ...b, disciplinas: b.disciplinas.map((d, j) => (j === dIdx ? { ...d, ...patch } : d)) }
+          : b,
+      ),
+    );
+  };
+
+  const addDisciplina = (bIdx: number) => {
+    setBlocos((prev) =>
+      prev.map((b, i) => (i === bIdx ? { ...b, disciplinas: [...b.disciplinas, disciplinaVazia()] } : b)),
+    );
+  };
+
+  const removeDisciplina = (bIdx: number, dIdx: number) => {
+    setBlocos((prev) =>
+      prev.map((b, i) =>
+        i === bIdx ? { ...b, disciplinas: b.disciplinas.filter((_, j) => j !== dIdx) } : b,
+      ),
+    );
   };
 
   const toggleBloco = (idx: number) => {
@@ -118,6 +151,7 @@ const Turma = () => {
           {blocos.map((bloco, idx) => {
             const aberto = abertos[idx];
             const vazio = blocoEstaVazio(bloco);
+            const qtdDisc = bloco.disciplinas.filter((d) => !disciplinaEstaVazia(d)).length;
             return (
               <Card key={idx} className="overflow-hidden shadow-card animate-fade-in">
                 <button
@@ -132,7 +166,9 @@ const Turma = () => {
                     <div className="text-left">
                       <div className="font-semibold">{DIAS_SEMANA[idx]}</div>
                       <div className="text-xs text-muted-foreground">
-                        {vazio ? "Sem aula (em branco no PDF)" : bloco.disciplina || "Preenchido"}
+                        {vazio
+                          ? "Sem aula (em branco no PDF)"
+                          : `${qtdDisc} disciplina${qtdDisc === 1 ? "" : "s"} preenchida${qtdDisc === 1 ? "" : "s"}`}
                       </div>
                     </div>
                   </div>
@@ -141,53 +177,83 @@ const Turma = () => {
 
                 {aberto && (
                   <div className="p-5 pt-2 space-y-4 border-t">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label>Data</Label>
-                        <Input
-                          type="date"
-                          value={bloco.data}
-                          onChange={(e) => updateBloco(idx, { data: e.target.value })}
-                          className="mt-1"
-                        />
+                    <div>
+                      <Label>Data</Label>
+                      <Input
+                        type="date"
+                        value={bloco.data}
+                        onChange={(e) => updateBloco(idx, { data: e.target.value })}
+                        className="mt-1 max-w-xs"
+                      />
+                    </div>
+
+                    {bloco.disciplinas.map((disc, dIdx) => (
+                      <div key={dIdx} className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-foreground">
+                            Disciplina {dIdx + 1}
+                          </h3>
+                          {bloco.disciplinas.length > 1 && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => removeDisciplina(idx, dIdx)}
+                              className="h-8 px-2 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" /> Remover
+                            </Button>
+                          )}
+                        </div>
+                        <div>
+                          <Label>Disciplina</Label>
+                          <Input
+                            value={disc.disciplina}
+                            onChange={(e) => updateDisciplina(idx, dIdx, { disciplina: e.target.value })}
+                            placeholder="Ex.: Linguagem"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label>Conteúdo</Label>
+                          <Textarea
+                            value={disc.conteudo}
+                            onChange={(e) => updateDisciplina(idx, dIdx, { conteudo: e.target.value })}
+                            rows={2}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label>Atividade de classe</Label>
+                          <Textarea
+                            value={disc.atividadeClasse}
+                            onChange={(e) => updateDisciplina(idx, dIdx, { atividadeClasse: e.target.value })}
+                            rows={2}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label>Atividade de casa</Label>
+                          <Textarea
+                            value={disc.atividadeCasa}
+                            onChange={(e) => updateDisciplina(idx, dIdx, { atividadeCasa: e.target.value })}
+                            rows={2}
+                            className="mt-1"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <Label>Disciplina</Label>
-                        <Input
-                          value={bloco.disciplina}
-                          onChange={(e) => updateBloco(idx, { disciplina: e.target.value })}
-                          placeholder="Ex.: Linguagem"
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Conteúdo</Label>
-                      <Textarea
-                        value={bloco.conteudo}
-                        onChange={(e) => updateBloco(idx, { conteudo: e.target.value })}
-                        rows={2}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label>Atividade de classe</Label>
-                      <Textarea
-                        value={bloco.atividadeClasse}
-                        onChange={(e) => updateBloco(idx, { atividadeClasse: e.target.value })}
-                        rows={2}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label>Atividade de casa</Label>
-                      <Textarea
-                        value={bloco.atividadeCasa}
-                        onChange={(e) => updateBloco(idx, { atividadeCasa: e.target.value })}
-                        rows={2}
-                        className="mt-1"
-                      />
-                    </div>
+                    ))}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addDisciplina(idx)}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4" /> Adicionar disciplina
+                    </Button>
+
                     <div>
                       <Label>Observação (opcional)</Label>
                       <Textarea
