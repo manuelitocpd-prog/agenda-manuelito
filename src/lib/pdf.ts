@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import logoUrl from "@/assets/logo-pdf.png";
-import { Bloco, blocoEstaVazio, DIAS_SEMANA } from "./turmas";
+import { Bloco, blocoEstaVazio, disciplinaEstaVazia, DIAS_SEMANA } from "./turmas";
 
 let cachedLogo: string | null = null;
 async function loadLogo(): Promise<string> {
@@ -35,13 +35,12 @@ export async function gerarPdfAgenda({ turmaNome, blocos }: PdfArgs): Promise<js
   const margin = 8;
   const gap = 4;
 
-  // Grid 2 colunas x 3 linhas → 5 blocos preenchidos + 1 vazio
   const cols = 2;
   const rows = 3;
   const blockW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
   const blockH = (pageH - margin * 2 - gap * (rows - 1)) / rows;
 
-  // Layout: 3 à esquerda, 2 à direita → ordem: (0,0),(0,1),(0,2),(1,0),(1,1)
+  // Layout: 3 à esquerda, 2 à direita
   const positions = [
     { col: 0, row: 0 },
     { col: 0, row: 1 },
@@ -59,6 +58,9 @@ export async function gerarPdfAgenda({ turmaNome, blocos }: PdfArgs): Promise<js
 
   return doc;
 }
+
+const FONT_BASE = 11;
+const FONT_MIN = 7;
 
 function desenharBloco(
   doc: jsPDF,
@@ -85,14 +87,12 @@ function desenharBloco(
   doc.setLineWidth(0.3);
   doc.line(x, y + headerH, x + w, y + headerH);
 
-  // Logo
   try {
     doc.addImage(logoData, "PNG", x + 2, y + 2, 10, 10);
   } catch {
     /* noop */
   }
 
-  // Texto cabeçalho
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(0);
@@ -101,7 +101,6 @@ function desenharBloco(
   doc.setFontSize(8);
   doc.text(turmaNome.toUpperCase(), x + 14, y + 9.5);
 
-  // Data + dia
   const dia = DIAS_SEMANA[idx] ?? "";
   const dataFmt = formatarData(bloco.data);
   doc.setFont("helvetica", "bold");
@@ -111,7 +110,6 @@ function desenharBloco(
   doc.text(headerRight, x + w - 2 - tw, y + 9.5);
 
   if (vazio) {
-    // Bloco em branco — apenas linhas de anotação
     doc.setDrawColor(220);
     doc.setLineWidth(0.2);
     const startY = y + headerH + 6;
@@ -122,44 +120,23 @@ function desenharBloco(
     return;
   }
 
-  // Conteúdo
-  let cy = y + headerH + 4;
+  const contentTop = y + headerH + 3;
+  const contentBottom = bloco.incluirAssinatura ? y + h - 9 : y + h - 3;
   const innerW = w - 6;
   const px = x + 3;
-  const bottomLimit = y + h - 3;
 
-  const drawField = (label: string, value: string, bold = false) => {
-    if (!value) return;
-    if (cy > bottomLimit - 4) return;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(80);
-    doc.text(label.toUpperCase(), px, cy);
-    cy += 3;
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(20);
-    const lines = doc.splitTextToSize(value, innerW);
-    const maxLines = Math.max(1, Math.floor((bottomLimit - cy) / 3.5));
-    const used = lines.slice(0, maxLines);
-    doc.text(used, px, cy);
-    cy += used.length * 3.5 + 1.5;
-    // separador
-    if (cy < bottomLimit - 2) {
-      doc.setDrawColor(230);
-      doc.setLineWidth(0.15);
-      doc.line(px, cy, px + innerW, cy);
-      cy += 2;
+  // Shrink-to-fit: encontrar maior fonte que cabe
+  let chosen = FONT_BASE;
+  for (let f = FONT_BASE; f >= FONT_MIN; f--) {
+    if (medirAltura(doc, bloco, innerW, f) <= contentBottom - contentTop) {
+      chosen = f;
+      break;
     }
-  };
+    chosen = f;
+  }
 
-  drawField("Disciplina", bloco.disciplina, true);
-  drawField("Conteúdo", bloco.conteudo);
-  drawField("Atividade de classe", bloco.atividadeClasse);
-  drawField("Atividade de casa", bloco.atividadeCasa);
-  if (bloco.observacao) drawField("Observação", bloco.observacao);
+  renderizarConteudo(doc, bloco, px, contentTop, innerW, contentBottom, chosen);
 
-  // Assinatura — fixa no rodapé
   if (bloco.incluirAssinatura) {
     const sigY = y + h - 6;
     doc.setDrawColor(120);
@@ -169,5 +146,101 @@ function desenharBloco(
     doc.setFontSize(7);
     doc.setTextColor(80);
     doc.text("Assinatura do responsável", px, sigY + 3);
+  }
+}
+
+// ============ Métricas e renderização ============
+
+function lineHeight(fontPt: number): number {
+  // pt -> mm aprox * fator de leading
+  return (fontPt * 0.3528) * 1.15;
+}
+
+function labelHeight(fontPt: number): number {
+  // labels sempre ~0.85x do tamanho base
+  return Math.max(2.6, fontPt * 0.3528 * 0.95);
+}
+
+interface Campo {
+  label: string;
+  value: string;
+}
+
+function camposDoBloco(bloco: Bloco): Array<Campo | "sep"> {
+  const out: Array<Campo | "sep"> = [];
+  const validas = bloco.disciplinas.filter((d) => !disciplinaEstaVazia(d));
+  validas.forEach((d, i) => {
+    if (i > 0) out.push("sep");
+    if (d.disciplina) out.push({ label: "Disciplina", value: d.disciplina });
+    if (d.conteudo) out.push({ label: "Conteúdo", value: d.conteudo });
+    if (d.atividadeClasse) out.push({ label: "Atividade de classe", value: d.atividadeClasse });
+    if (d.atividadeCasa) out.push({ label: "Atividade de casa", value: d.atividadeCasa });
+  });
+  if (bloco.observacao) {
+    if (out.length) out.push("sep");
+    out.push({ label: "Observação", value: bloco.observacao });
+  }
+  return out;
+}
+
+function medirAltura(doc: jsPDF, bloco: Bloco, innerW: number, fontPt: number): number {
+  const itens = camposDoBloco(bloco);
+  const lh = lineHeight(fontPt);
+  const lblH = labelHeight(fontPt);
+  let total = 0;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(fontPt);
+  for (const it of itens) {
+    if (it === "sep") {
+      total += lh * 0.4 + 1;
+      continue;
+    }
+    total += lblH + 0.6; // label + espaçamento
+    const lines = doc.splitTextToSize(it.value, innerW);
+    total += lines.length * lh + 1.2;
+  }
+  return total;
+}
+
+function renderizarConteudo(
+  doc: jsPDF,
+  bloco: Bloco,
+  px: number,
+  startY: number,
+  innerW: number,
+  bottomLimit: number,
+  fontPt: number,
+) {
+  const itens = camposDoBloco(bloco);
+  const lh = lineHeight(fontPt);
+  const lblH = labelHeight(fontPt);
+  let cy = startY + lblH;
+
+  for (const it of itens) {
+    if (it === "sep") {
+      if (cy + 2 > bottomLimit) return;
+      doc.setDrawColor(210);
+      doc.setLineWidth(0.2);
+      doc.line(px, cy - lh * 0.3, px + innerW, cy - lh * 0.3);
+      cy += lh * 0.4 + 1;
+      continue;
+    }
+    if (cy > bottomLimit) return;
+    // Label em negrito
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(Math.max(7, fontPt - 2.5));
+    doc.setTextColor(60);
+    doc.text(it.label.toUpperCase(), px, cy);
+    cy += 0.6 + lh * 0.5;
+    // Valor
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontPt);
+    doc.setTextColor(20);
+    const lines = doc.splitTextToSize(it.value, innerW);
+    const maxLines = Math.max(0, Math.floor((bottomLimit - cy) / lh));
+    const used = lines.slice(0, maxLines);
+    if (used.length === 0) return;
+    doc.text(used, px, cy);
+    cy += used.length * lh + 1.2;
   }
 }
