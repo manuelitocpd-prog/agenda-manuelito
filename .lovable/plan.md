@@ -1,35 +1,32 @@
 
-## Atualizações no sistema de agendas
+## Permitir que professoras baixem suas agendas
 
-### 1. Conta admin
-- Criar conta no sistema de autenticação para `manuelitocpd@gmail.com` (com senha temporária que você poderá redefinir no primeiro acesso ou que eu defino e te informo)
-- Inserir registro em `user_roles` com papel `admin` para esse usuário
-- Você poderá entrar em `/admin` imediatamente após
+Hoje, ao clicar em **Enviar**, o PDF é baixado automaticamente uma única vez. Se a professora fechar a aba ou perder o arquivo, não há como recuperar — o painel de histórico é restrito ao admin.
 
-### 2. Múltiplas disciplinas por dia
-Hoje cada bloco (dia) tem **uma** disciplina com seus campos. Vou alterar para permitir **N disciplinas por dia**:
+### O que vou adicionar
 
-- Cada bloco passa a conter uma lista de "disciplinas", cada uma com: **disciplina, conteúdo, atividade de classe, atividade de casa**
-- Botão **"+ Adicionar disciplina"** dentro de cada dia, abrindo um novo conjunto de campos
-- Botão de **remover** ao lado de cada disciplina extra (a primeira sempre fica)
-- **Observação** e **assinatura do responsável** continuam sendo um único campo por dia (não se repetem por disciplina)
-- Estrutura salva no banco (campo `blocos` JSONB) será expandida — agendas antigas continuam compatíveis (migração leve no carregamento, tratando o formato antigo como uma única disciplina)
+**Página pública de histórico por turma** (`/turma/:slug/historico`)
+- Acessível a partir de um botão **"Ver agendas enviadas"** no topo do formulário da turma
+- Lista as últimas agendas enviadas **daquela turma**, ordenadas da mais recente para a mais antiga
+- Cada item mostra: semana (data de início), data/hora do envio, e botão **Baixar PDF**
+- Sem login — qualquer pessoa com o link da turma pode baixar
+- Limite de exibição: últimas 20 agendas da turma (suficiente para uso prático, evita lista enorme)
 
-### 3. PDF — tipografia e ajuste automático
-- **Tamanho base de fonte = 11pt** para o conteúdo dos campos
-- **Títulos dos campos em negrito** (Disciplina, Conteúdo, Atividade de classe, Atividade de casa, Observação) — já são, mas vou reforçar peso/contraste
-- **Auto-ajuste (shrink-to-fit):** quando o conteúdo de um bloco não couber na caixa em 11pt, a fonte daquele bloco específico é reduzida progressivamente (10 → 9 → 8 → 7) até caber. Blocos que cabem em 11pt permanecem em 11pt — a redução é exceção, por bloco, nunca global.
-- Múltiplas disciplinas no mesmo bloco são renderizadas em sequência, com pequeno separador entre elas, mantendo o mesmo cálculo de auto-ajuste
+### Ajuste de segurança no banco
 
-### 4. Formulário (tela da turma)
-- Reestruturação visual do bloco do dia para acomodar uma ou mais disciplinas, mantendo a UX limpa: cada disciplina dentro de um sub-cartão com cabeçalho "Disciplina 1", "Disciplina 2"…
-- Indicador no resumo do dia mostra quantas disciplinas foram preenchidas
+Hoje a tabela `agendas` permite apenas:
+- INSERT público (qualquer um envia)
+- SELECT/DELETE só para admin
+
+Vou adicionar uma política de **SELECT público** para que a página de histórico consiga ler os registros. Os dados já são de uso interno do colégio (agendas escolares) e a página fica acessível só para quem entra pelo app — mesmo nível de proteção do envio.
 
 ### Detalhes técnicos
-- `src/lib/turmas.ts`: novo tipo `Disciplina` e `Bloco` passa a ter `disciplinas: Disciplina[]` (+ `observacao`, `incluirAssinatura`, `data`); helper de migração para o formato antigo
-- `src/pages/Turma.tsx`: UI para adicionar/remover disciplinas; ajustes nos handlers
-- `src/pages/Admin.tsx`: leitura compatível com ambos os formatos
-- `src/lib/pdf.ts`: renderização de múltiplas disciplinas por bloco + algoritmo de shrink-to-fit por bloco (mede altura necessária, decrementa fonte até caber)
-- Criação do usuário admin via Supabase Auth Admin API + `INSERT` em `user_roles`
 
-Após aprovação eu executo tudo e te informo a senha inicial da conta admin.
+- Nova rota `/turma/:slug/historico` em `src/App.tsx`
+- Nova página `src/pages/TurmaHistorico.tsx` que consulta `agendas` filtrando por `turma`, ordena por `created_at desc`, e usa `gerarPdfAgenda` (já existente em `src/lib/pdf.ts`) para baixar
+- Botão **"Ver agendas enviadas"** no cabeçalho de `src/pages/Turma.tsx`
+- Migração SQL adicionando policy: `CREATE POLICY "Leitura pública das agendas" ON agendas FOR SELECT TO public USING (true);`
+
+### Alternativa, se preferir mais privacidade
+
+Se você quiser que apenas o admin tenha acesso ao histórico (mantendo o comportamento atual), me avise — nesse caso eu não faço nada e a professora continua precisando salvar o PDF na hora do envio.
