@@ -13,25 +13,78 @@ export function getTurma(slug: string) {
 
 export const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
-export interface Bloco {
-  data: string;
+export interface Disciplina {
   disciplina: string;
   conteudo: string;
   atividadeClasse: string;
   atividadeCasa: string;
+}
+
+export interface Bloco {
+  data: string;
+  disciplinas: Disciplina[];
   observacao: string;
   incluirAssinatura: boolean;
 }
 
-export const blocoVazio = (): Bloco => ({
-  data: "",
+export const disciplinaVazia = (): Disciplina => ({
   disciplina: "",
   conteudo: "",
   atividadeClasse: "",
   atividadeCasa: "",
+});
+
+export const blocoVazio = (): Bloco => ({
+  data: "",
+  disciplinas: [disciplinaVazia()],
   observacao: "",
   incluirAssinatura: false,
 });
 
+export const disciplinaEstaVazia = (d: Disciplina) =>
+  !d.disciplina && !d.conteudo && !d.atividadeClasse && !d.atividadeCasa;
+
 export const blocoEstaVazio = (b: Bloco) =>
-  !b.data && !b.disciplina && !b.conteudo && !b.atividadeClasse && !b.atividadeCasa && !b.observacao;
+  !b.data && !b.observacao && b.disciplinas.every(disciplinaEstaVazia);
+
+// Compat: converte formato antigo {disciplina, conteudo, ...} para novo
+type BlocoLegacy = {
+  data?: string;
+  disciplina?: string;
+  conteudo?: string;
+  atividadeClasse?: string;
+  atividadeCasa?: string;
+  observacao?: string;
+  incluirAssinatura?: boolean;
+  disciplinas?: Disciplina[];
+};
+
+export function normalizarBloco(raw: unknown): Bloco {
+  const b = (raw ?? {}) as BlocoLegacy;
+  if (Array.isArray(b.disciplinas) && b.disciplinas.length > 0) {
+    return {
+      data: b.data ?? "",
+      disciplinas: b.disciplinas.map((d) => ({
+        disciplina: d.disciplina ?? "",
+        conteudo: d.conteudo ?? "",
+        atividadeClasse: d.atividadeClasse ?? "",
+        atividadeCasa: d.atividadeCasa ?? "",
+      })),
+      observacao: b.observacao ?? "",
+      incluirAssinatura: !!b.incluirAssinatura,
+    };
+  }
+  return {
+    data: b.data ?? "",
+    disciplinas: [
+      {
+        disciplina: b.disciplina ?? "",
+        conteudo: b.conteudo ?? "",
+        atividadeClasse: b.atividadeClasse ?? "",
+        atividadeCasa: b.atividadeCasa ?? "",
+      },
+    ],
+    observacao: b.observacao ?? "",
+    incluirAssinatura: !!b.incluirAssinatura,
+  };
+}
