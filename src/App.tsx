@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Turma from "./pages/Turma.tsx";
+import TurmaHistorico from "./pages/TurmaHistorico.tsx";
 import Admin from "./pages/Admin.tsx";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/turma/:slug" element={<Turma />} />
+          <Route path="/turma/:slug/historico" element={<TurmaHistorico />} />
           <Route path="/admin" element={<Admin />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

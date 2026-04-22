@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronUp, Eye, Plus, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Eye, History, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/logo-colorida.png";
 import { Button } from "@/components/ui/button";
@@ -123,12 +123,19 @@ const Turma = () => {
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-4">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Link>
-        <div className="flex items-center gap-4">
-          <img src={logo} alt="Colégio Manuelito" className="h-16 w-auto" />
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Agenda</p>
-            <h1 className="text-2xl md:text-3xl font-bold">{turma.nome}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <img src={logo} alt="Colégio Manuelito" className="h-16 w-auto" />
+            <div>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Agenda</p>
+              <h1 className="text-2xl md:text-3xl font-bold">{turma.nome}</h1>
+            </div>
           </div>
+          <Button asChild variant="outline" size="sm" className="self-start sm:self-auto">
+            <Link to={`/turma/${turma.slug}/historico`}>
+              <History className="h-4 w-4" /> Ver agendas enviadas
+            </Link>
+          </Button>
         </div>
       </header>
 
