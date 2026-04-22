@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { gerarPdfAgenda } from "@/lib/pdf";
-import type { Bloco } from "@/lib/turmas";
+import { normalizarBloco, type Bloco } from "@/lib/turmas";
 import logo from "@/assets/logo-colorida.png";
 
 interface AgendaRow {
