@@ -41,6 +41,24 @@ export const blocoVazio = (): Bloco => ({
   incluirAssinatura: false,
 });
 
+export function nomearArquivoPdf(turmaNome: string, blocos: Bloco[], semanaInicio: string): string {
+  const datas = blocos
+    .map((b) => b.data)
+    .filter(Boolean)
+    .sort();
+
+  const formatar = (iso: string) => {
+    const [, m, d] = iso.split("-");
+    return `${d}/${m}`;
+  };
+
+  const fallback = semanaInicio ? formatar(semanaInicio) : "??/??";
+  const inicio = datas.length > 0 ? formatar(datas[0]) : fallback;
+  const fim = datas.length > 0 ? formatar(datas[datas.length - 1]) : fallback;
+
+  return `agenda - ${turmaNome} - ${inicio} a ${fim}.pdf`;
+}
+
 export const disciplinaEstaVazia = (d: Disciplina) =>
   !d.disciplina && !d.conteudo && !d.atividadeClasse && !d.atividadeCasa;
 

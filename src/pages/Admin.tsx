@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { gerarPdfAgenda } from "@/lib/pdf";
-import { normalizarBloco, type Bloco } from "@/lib/turmas";
+import { normalizarBloco, nomearArquivoPdf, type Bloco } from "@/lib/turmas";
 import logo from "@/assets/logo-colorida.png";
 
 interface AgendaRow {
@@ -98,7 +98,7 @@ const Admin = () => {
   const baixar = async (a: AgendaRow) => {
     const blocos = (a.blocos as unknown as unknown[]).map(normalizarBloco);
     const doc = await gerarPdfAgenda({ turmaNome: a.turma, blocos });
-    doc.save(`agenda-${a.turma}-${a.semana_inicio}.pdf`);
+    doc.save(nomearArquivoPdf(a.turma, blocos, a.semana_inicio));
   };
 
   const excluir = async (id: string) => {
