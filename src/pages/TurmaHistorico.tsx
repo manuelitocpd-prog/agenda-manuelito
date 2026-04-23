@@ -340,7 +340,7 @@ const TurmaHistorico = () => {
                     <div className="border-t bg-muted/20 p-4 space-y-4">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         {editavel ? (
-                          <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/15">
+                          <Badge className="bg-primary/15 text-primary border-primary/30 hover:bg-primary/15">
                             Semana em andamento — edição permitida
                           </Badge>
                         ) : (
