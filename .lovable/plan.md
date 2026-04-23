@@ -1,56 +1,59 @@
 
-## Quatro ajustes: nome de arquivo, edição no histórico, PNG por dia e favicon
 
-### 1. Helper de nome de arquivo PDF
-Em `src/lib/turmas.ts`, adicionar `nomearArquivoPdf(turmaNome, blocos, semanaInicio)` que retorna `agenda - {Turma} - {dd/mm} a {dd/mm}.pdf`, usando a primeira/última `data` preenchida nos blocos (ordenada) ou `semana_inicio` como fallback.
+## Ajustes: disciplinas por turma + correção do layout do PDF
 
-Aplicar em todos os `doc.save(...)`:
-- `src/pages/Turma.tsx` (linha 108)
-- `src/pages/TurmaHistorico.tsx`
-- `src/pages/Admin.tsx` (linha 101)
+### 1. Disciplinas por turma (não globais)
 
-### 2. Visualizar e editar agendas no histórico
-Reescrever `src/pages/TurmaHistorico.tsx` para que cada card tenha dois botões: **Ver agenda / Ocultar** (ícone Eye) e **PDF** (Download).
-
-Ao expandir, percorre os 5 dias da semana exibindo apenas dias não-vazios, com nome do dia (`DIAS_SEMANA[i]`) + data formatada `dd/mm`, e para cada disciplina não-vazia: Disciplina, Conteúdo, Atividade de classe, Atividade de casa. Observação do dia ao final.
-
-**Regra de prazo:** calcula sexta = `semana_inicio + 4 dias`. Se hoje (local) ≤ sexta → editável; senão → somente leitura.
-
-- **Editável:** badge verde "Semana em andamento — edição permitida". Campos viram `Input`/`Textarea` (mesmo layout do `Turma.tsx`). Botão **Salvar alterações** no rodapé do card faz `UPDATE` em `agendas` filtrando por `id`, atualizando `blocos`. Toast de sucesso/erro, estado local atualizado.
-- **Somente leitura:** badge cinza "Semana encerrada — somente leitura". Campos como texto puro.
-
-**Ajuste de banco necessário:** a tabela `agendas` hoje só tem INSERT público e SELECT/DELETE para admin — **não há policy de UPDATE**. Vou adicionar migração:
+**Tabela `disciplinas`** com coluna `turma` (slug):
 ```sql
-CREATE POLICY "Atualização pública das agendas"
-  ON public.agendas FOR UPDATE
-  TO public USING (true) WITH CHECK (true);
+CREATE TABLE public.disciplinas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  turma text NOT NULL,
+  nome text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (turma, nome)
+);
+ALTER TABLE public.disciplinas ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Leitura pública de disciplinas"
+  ON public.disciplinas FOR SELECT TO public USING (true);
+
+CREATE POLICY "Admin gerencia disciplinas"
+  ON public.disciplinas FOR ALL TO authenticated
+  USING (has_role(auth.uid(), 'admin'))
+  WITH CHECK (has_role(auth.uid(), 'admin'));
 ```
-(Mesmo nível dos demais acessos públicos já existentes para essa tabela.)
 
-### 3. PNG por dia (dentro do card expandido)
-Instalar `html2canvas`. Para cada dia exibido no modo expandido, botão pequeno com ícone `Camera` ao lado do cabeçalho do dia.
+**Admin (`/admin`)** — nova seção "Disciplinas por turma":
+- Seletor da turma (Infantil 2/3/4/5).
+- Lista as disciplinas daquela turma, com input + botão **Adicionar** e lixeira para remover.
+- Cada disciplina pertence a uma turma específica.
 
-Ao clicar:
-- Renderiza um `<div>` oculto (`position: absolute; left: -9999px; width: 600px; padding: 32px; background: white`) contendo: cabeçalho com `<img src={logo}>` + nome da turma + dia + data; corpo com cada disciplina (campos vazios omitidos) separados por linha; rodapé com observação.
-- Logo importada normalmente de `@/assets/logo-colorida.png` (Vite resolve para URL — html2canvas baixa via `useCORS`).
-- `html2canvas(elemento)` → `canvas.toDataURL("image/png")` → download via `<a download>`.
-- Nome: `imagem - {Turma} - {Dia} - {dd/mm}.png`.
-- Limpa o elemento oculto após captura.
+**Professora (`Turma.tsx` e edição em `TurmaHistorico.tsx`)**:
+- Ao montar, carrega só as disciplinas da turma corrente (`WHERE turma = slug`).
+- Campo "Disciplina" vira combobox (`Popover` + `Command`) — escolhe da lista OU digita texto livre.
 
-Funciona tanto em modo editável quanto somente leitura — usa o estado local atual (já refletindo edições não salvas? Não — usa o estado salvo do card, para evitar confusão). Decisão: usa o estado atual em memória do card (rascunho), assim o que a professora vê é o que sai no PNG.
+**Novo componente:** `src/components/DisciplinaCombobox.tsx`.
 
-### 4. Favicon
-- Copiar `src/assets/logo-colorida.png` para `public/favicon.png`.
-- Remover `public/favicon.ico` (browser pede por padrão e sobrescreveria).
-- Em `index.html`, adicionar dentro do `<head>`:
-  ```html
-  <link rel="icon" type="image/png" href="/favicon.png" />
-  ```
+### 2. Corrigir layout do PDF (texto sobrepondo títulos)
 
-### Detalhes técnicos resumidos
-- **Arquivos editados:** `src/lib/turmas.ts`, `src/pages/Turma.tsx`, `src/pages/TurmaHistorico.tsx`, `src/pages/Admin.tsx`, `index.html`.
-- **Arquivos criados:** `public/favicon.png` (cópia), nova migração SQL para policy de UPDATE.
-- **Arquivos removidos:** `public/favicon.ico`.
-- **Dependência nova:** `html2canvas`.
-- **Schema:** sem mudança de tabelas, só nova RLS policy de UPDATE público em `agendas`.
-- **Sem novas rotas.**
+Problema atual em `src/lib/pdf.ts` (`renderizarConteudo`): o avanço vertical após o label está pequeno (`0.6 + lh * 0.5`), fazendo o valor da próxima linha colidir/sobrepor o título da seção quando a fonte encolhe.
+
+**Correções no algoritmo de renderização e medição:**
+
+- **Espaçamento label → valor:** aumentar de `0.6 + lh * 0.5` para `lblH + 1.2` (gap proporcional ao tamanho do label, garantindo que o valor sempre comece abaixo do label).
+- **Espaçamento valor → próximo bloco:** aumentar de `1.2` para `lh * 0.6` (mais ar entre seções).
+- **Separador entre disciplinas:** aumentar a folga de `lh * 0.4 + 1` para `lh * 0.8 + 1.5`, e desenhar a linha em `cy - lh * 0.5` para não encostar no texto anterior.
+- **Sincronizar `medirAltura` com a renderização** — hoje as duas funções usam fórmulas levemente diferentes, o que faz o shrink-to-fit escolher uma fonte que "cabe" na medição mas estoura na renderização. Vou extrair as constantes (`GAP_LABEL_VALOR`, `GAP_APOS_VALOR`, `GAP_SEPARADOR`) e usar as mesmas nas duas funções.
+- **Ponto de partida do conteúdo:** em vez de `cy = startY + lblH`, usar `cy = startY + lblH * 0.8` (o `text` do jsPDF usa baseline; o ajuste evita que o primeiro label fique colado no topo do bloco).
+- **Margem de segurança no shrink-to-fit:** ao medir, considerar `contentBottom - contentTop - 1` (1mm de folga) para evitar texto encostando na borda inferior ou na linha de assinatura.
+- **Quebra de palavras longas:** garantir que `splitTextToSize` quebre palavras gigantes (sem espaço) — atualmente o jsPDF pode estourar a largura. Vou pré-processar o texto inserindo zero-width breaks em palavras > 25 caracteres.
+
+Resultado esperado: títulos (DISCIPLINA / CONTEÚDO / ATIVIDADE…) sempre acima do respectivo valor, sem sobreposição, com espaçamento consistente independentemente da fonte escolhida pelo shrink-to-fit.
+
+### Arquivos
+
+- **Editados:** `src/pages/Admin.tsx`, `src/pages/Turma.tsx`, `src/pages/TurmaHistorico.tsx`, `src/lib/pdf.ts`.
+- **Criados:** `src/components/DisciplinaCombobox.tsx`, nova migração SQL.
+- **Sem mudanças** em rotas ou outras tabelas.
+
