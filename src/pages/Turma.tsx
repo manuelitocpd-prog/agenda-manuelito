@@ -47,7 +47,21 @@ const Turma = () => {
   }
 
   const updateBloco = (idx: number, patch: Partial<Bloco>) => {
-    setBlocos((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
+    setBlocos((prev) => {
+      const next = prev.map((b, i) => (i === idx ? { ...b, ...patch } : b));
+      // Auto-preencher datas dos dias seguintes ao alterar a data do primeiro dia
+      if (idx === 0 && patch.data !== undefined && patch.data) {
+        const [y, m, d] = patch.data.split("-").map(Number);
+        for (let i = 1; i < next.length; i++) {
+          const dt = new Date(y, m - 1, d + i);
+          const yy = dt.getFullYear();
+          const mm = String(dt.getMonth() + 1).padStart(2, "0");
+          const dd = String(dt.getDate()).padStart(2, "0");
+          next[i] = { ...next[i], data: `${yy}-${mm}-${dd}` };
+        }
+      }
+      return next;
+    });
   };
 
   const updateDisciplina = (bIdx: number, dIdx: number, patch: Partial<Disciplina>) => {
