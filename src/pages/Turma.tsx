@@ -16,6 +16,7 @@ import {
   disciplinaEstaVazia,
   disciplinaVazia,
   getTurma,
+  nomearArquivoPdf,
   type Bloco,
   type Disciplina,
 } from "@/lib/turmas";
@@ -105,7 +106,7 @@ const Turma = () => {
       if (error) throw error;
 
       const doc = await gerarPdfAgenda({ turmaNome: turma.nome, blocos });
-      doc.save(`agenda-${turma.slug}-${semanaInicio}.pdf`);
+      doc.save(nomearArquivoPdf(turma.nome, blocos, semanaInicio));
 
       toast.success("Agenda enviada com sucesso!");
       setTimeout(() => navigate("/"), 1500);
