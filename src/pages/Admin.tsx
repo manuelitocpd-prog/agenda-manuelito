@@ -42,6 +42,54 @@ const Admin = () => {
   const [busy, setBusy] = useState(false);
   const [agendas, setAgendas] = useState<AgendaRow[]>([]);
   const [filtroTurma, setFiltroTurma] = useState("");
+  const [discTurma, setDiscTurma] = useState<string>(TURMAS[0].slug);
+  const [disciplinas, setDisciplinas] = useState<DisciplinaRow[]>([]);
+  const [novaDisc, setNovaDisc] = useState("");
+  const [salvandoDisc, setSalvandoDisc] = useState(false);
+
+  const carregarDisciplinas = async (turmaSlug: string) => {
+    const { data, error } = await supabase
+      .from("disciplinas")
+      .select("id, turma, nome")
+      .eq("turma", turmaSlug)
+      .order("nome");
+    if (error) {
+      toast.error("Erro ao carregar disciplinas");
+      return;
+    }
+    setDisciplinas((data ?? []) as DisciplinaRow[]);
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void carregarDisciplinas(discTurma);
+  }, [isAdmin, discTurma]);
+
+  const adicionarDisciplina = async () => {
+    const nome = novaDisc.trim();
+    if (!nome) return;
+    setSalvandoDisc(true);
+    const { error } = await supabase
+      .from("disciplinas")
+      .insert({ turma: discTurma, nome });
+    setSalvandoDisc(false);
+    if (error) {
+      toast.error(error.message.includes("duplicate") ? "Esta disciplina já existe" : "Erro ao adicionar");
+      return;
+    }
+    setNovaDisc("");
+    void carregarDisciplinas(discTurma);
+  };
+
+  const removerDisciplina = async (id: string) => {
+    if (!confirm("Remover esta disciplina?")) return;
+    const { error } = await supabase.from("disciplinas").delete().eq("id", id);
+    if (error) {
+      toast.error("Erro ao remover");
+      return;
+    }
+    void carregarDisciplinas(discTurma);
+  };
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
