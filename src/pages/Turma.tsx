@@ -243,12 +243,13 @@ const Turma = () => {
                         </div>
                         <div>
                           <Label>Disciplina</Label>
-                          <Input
-                            value={disc.disciplina}
-                            onChange={(e) => updateDisciplina(idx, dIdx, { disciplina: e.target.value })}
-                            placeholder="Ex.: Linguagem"
-                            className="mt-1"
-                          />
+                          <div className="mt-1">
+                            <DisciplinaCombobox
+                              value={disc.disciplina}
+                              onChange={(v) => updateDisciplina(idx, dIdx, { disciplina: v })}
+                              opcoes={disciplinasCadastradas}
+                            />
+                          </div>
                         </div>
                         <div>
                           <Label>Conteúdo</Label>
