@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { DisciplinaCombobox } from "@/components/DisciplinaCombobox";
 import {
   DIAS_SEMANA,
   disciplinaEstaVazia,
@@ -71,7 +72,18 @@ const TurmaHistorico = () => {
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [rascunhos, setRascunhos] = useState<Record<string, Bloco[]>>({});
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [disciplinasCadastradas, setDisciplinasCadastradas] = useState<string[]>([]);
   const captureRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!turma) return;
+    supabase
+      .from("disciplinas")
+      .select("nome")
+      .eq("turma", turma.slug)
+      .order("nome")
+      .then(({ data }) => setDisciplinasCadastradas((data ?? []).map((d) => d.nome)));
+  }, [turma]);
 
   useEffect(() => {
     const carregar = async () => {
@@ -422,15 +434,15 @@ const TurmaHistorico = () => {
                                       </div>
                                       <div>
                                         <Label>Disciplina</Label>
-                                        <Input
-                                          value={disc.disciplina}
-                                          onChange={(e) =>
-                                            updateDisciplina(a.id, bIdx, dIdx, {
-                                              disciplina: e.target.value,
-                                            })
-                                          }
-                                          className="mt-1"
-                                        />
+                                        <div className="mt-1">
+                                          <DisciplinaCombobox
+                                            value={disc.disciplina}
+                                            onChange={(v) =>
+                                              updateDisciplina(a.id, bIdx, dIdx, { disciplina: v })
+                                            }
+                                            opcoes={disciplinasCadastradas}
+                                          />
+                                        </div>
                                       </div>
                                       <div>
                                         <Label>Conteúdo</Label>
