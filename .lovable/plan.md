@@ -1,5 +1,3 @@
-
-
 ## Ajustes: disciplinas por turma + correção do layout do PDF
 
 ### 1. Disciplinas por turma (não globais)
@@ -44,16 +42,14 @@ Problema atual em `src/lib/pdf.ts` (`renderizarConteudo`): o avanço vertical ap
 - **Espaçamento label → valor:** aumentar de `0.6 + lh * 0.5` para `lblH + 1.2` (gap proporcional ao tamanho do label, garantindo que o valor sempre comece abaixo do label).
 - **Espaçamento valor → próximo bloco:** aumentar de `1.2` para `lh * 0.6` (mais ar entre seções).
 - **Separador entre disciplinas:** aumentar a folga de `lh * 0.4 + 1` para `lh * 0.8 + 1.5`, e desenhar a linha em `cy - lh * 0.5` para não encostar no texto anterior.
-- **Sincronizar `medirAltura` com a renderização** — hoje as duas funções usam fórmulas levemente diferentes, o que faz o shrink-to-fit escolher uma fonte que "cabe" na medição mas estoura na renderização. Vou extrair as constantes (`GAP_LABEL_VALOR`, `GAP_APOS_VALOR`, `GAP_SEPARADOR`) e usar as mesmas nas duas funções.
-- **Ponto de partida do conteúdo:** em vez de `cy = startY + lblH`, usar `cy = startY + lblH * 0.8` (o `text` do jsPDF usa baseline; o ajuste evita que o primeiro label fique colado no topo do bloco).
-- **Margem de segurança no shrink-to-fit:** ao medir, considerar `contentBottom - contentTop - 1` (1mm de folga) para evitar texto encostando na borda inferior ou na linha de assinatura.
-- **Quebra de palavras longas:** garantir que `splitTextToSize` quebre palavras gigantes (sem espaço) — atualmente o jsPDF pode estourar a largura. Vou pré-processar o texto inserindo zero-width breaks em palavras > 25 caracteres.
+- **Sincronizar `medirAltura` com a renderização** — extrair constantes (`GAP_LABEL_VALOR`, `GAP_APOS_VALOR`, `GAP_SEPARADOR`) e usar as mesmas nas duas funções, para o shrink-to-fit não escolher uma fonte que cabe na medição mas estoura na renderização.
+- **Ponto de partida do conteúdo:** usar `cy = startY + lblH * 0.8` (o `text` do jsPDF usa baseline).
+- **Margem de segurança no shrink-to-fit:** considerar `contentBottom - contentTop - 1` (1mm de folga).
+- **Quebra de palavras longas:** pré-processar o texto inserindo quebras em palavras > 25 caracteres para evitar overflow horizontal.
 
-Resultado esperado: títulos (DISCIPLINA / CONTEÚDO / ATIVIDADE…) sempre acima do respectivo valor, sem sobreposição, com espaçamento consistente independentemente da fonte escolhida pelo shrink-to-fit.
+Resultado: títulos (DISCIPLINA / CONTEÚDO / ATIVIDADE…) sempre acima do respectivo valor, sem sobreposição, com espaçamento consistente.
 
 ### Arquivos
-
 - **Editados:** `src/pages/Admin.tsx`, `src/pages/Turma.tsx`, `src/pages/TurmaHistorico.tsx`, `src/lib/pdf.ts`.
 - **Criados:** `src/components/DisciplinaCombobox.tsx`, nova migração SQL.
 - **Sem mudanças** em rotas ou outras tabelas.
-
