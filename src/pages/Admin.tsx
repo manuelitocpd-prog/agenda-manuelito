@@ -1,15 +1,29 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Download, LogOut, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Download, LogOut, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { gerarPdfAgenda } from "@/lib/pdf";
-import { normalizarBloco, nomearArquivoPdf, type Bloco } from "@/lib/turmas";
+import { normalizarBloco, nomearArquivoPdf, TURMAS, type Bloco } from "@/lib/turmas";
 import logo from "@/assets/logo-colorida.png";
+
+interface DisciplinaRow {
+  id: string;
+  turma: string;
+  nome: string;
+}
 
 interface AgendaRow {
   id: string;
