@@ -40,7 +40,7 @@ export async function gerarPdfAgenda({ turmaNome, blocos }: PdfArgs): Promise<js
   const blockW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
   const blockH = (pageH - margin * 2 - gap * (rows - 1)) / rows;
 
-  // Layout: 3 à esquerda, 2 à direita
+  // 3 à esquerda, 2 à direita
   const positions = [
     { col: 0, row: 0 },
     { col: 0, row: 1 },
@@ -62,6 +62,19 @@ export async function gerarPdfAgenda({ turmaNome, blocos }: PdfArgs): Promise<js
 const FONT_BASE = 11;
 const FONT_MIN = 7;
 
+// Constantes compartilhadas entre medição e renderização
+function lineHeight(fontPt: number): number {
+  return fontPt * 0.3528 * 1.18;
+}
+function labelHeight(fontPt: number): number {
+  // labels usam ~ fontPt - 2.5
+  const lblPt = Math.max(7, fontPt - 2.5);
+  return lblPt * 0.3528 * 1.1;
+}
+const GAP_LABEL_VALOR = (fontPt: number) => labelHeight(fontPt) * 0.55 + 0.6;
+const GAP_APOS_VALOR = (fontPt: number) => lineHeight(fontPt) * 0.55;
+const GAP_SEPARADOR = (fontPt: number) => lineHeight(fontPt) * 0.9 + 1.2;
+
 function desenharBloco(
   doc: jsPDF,
   x: number,
@@ -73,7 +86,7 @@ function desenharBloco(
   turmaNome: string,
   logoData: string,
 ) {
-  // Borda externa
+  // Borda
   doc.setDrawColor(0);
   doc.setLineWidth(0.4);
   doc.rect(x, y, w, h);
@@ -125,10 +138,11 @@ function desenharBloco(
   const innerW = w - 6;
   const px = x + 3;
 
-  // Shrink-to-fit: encontrar maior fonte que cabe
-  let chosen = FONT_BASE;
+  // Shrink-to-fit com 1mm de folga de segurança
+  const espacoDisp = contentBottom - contentTop - 1;
+  let chosen = FONT_MIN;
   for (let f = FONT_BASE; f >= FONT_MIN; f--) {
-    if (medirAltura(doc, bloco, innerW, f) <= contentBottom - contentTop) {
+    if (medirAltura(doc, bloco, innerW, f) <= espacoDisp) {
       chosen = f;
       break;
     }
@@ -147,18 +161,6 @@ function desenharBloco(
     doc.setTextColor(80);
     doc.text("Assinatura do responsável", px, sigY + 3);
   }
-}
-
-// ============ Métricas e renderização ============
-
-function lineHeight(fontPt: number): number {
-  // pt -> mm aprox * fator de leading
-  return (fontPt * 0.3528) * 1.15;
-}
-
-function labelHeight(fontPt: number): number {
-  // labels sempre ~0.85x do tamanho base
-  return Math.max(2.6, fontPt * 0.3528 * 0.95);
 }
 
 interface Campo {
@@ -183,21 +185,39 @@ function camposDoBloco(bloco: Bloco): Array<Campo | "sep"> {
   return out;
 }
 
+// Quebra palavras gigantes para o jsPDF não estourar a largura
+function quebrarPalavrasLongas(texto: string, max = 25): string {
+  return texto
+    .split(/(\s+)/)
+    .map((parte) => {
+      if (/\s/.test(parte) || parte.length <= max) return parte;
+      const partes: string[] = [];
+      for (let i = 0; i < parte.length; i += max) {
+        partes.push(parte.slice(i, i + max));
+      }
+      return partes.join(" ");
+    })
+    .join("");
+}
+
 function medirAltura(doc: jsPDF, bloco: Bloco, innerW: number, fontPt: number): number {
   const itens = camposDoBloco(bloco);
   const lh = lineHeight(fontPt);
   const lblH = labelHeight(fontPt);
-  let total = 0;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(fontPt);
+  let total = lblH * 0.2; // pequeno topo (offset baseline)
   for (const it of itens) {
     if (it === "sep") {
-      total += lh * 0.4 + 1;
+      total += GAP_SEPARADOR(fontPt);
       continue;
     }
-    total += lblH + 0.6; // label + espaçamento
-    const lines = doc.splitTextToSize(it.value, innerW);
-    total += lines.length * lh + 1.2;
+    total += lblH; // label
+    total += GAP_LABEL_VALOR(fontPt); // gap label→valor
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontPt);
+    const txt = quebrarPalavrasLongas(it.value);
+    const lines = doc.splitTextToSize(txt, innerW) as string[];
+    total += lines.length * lh; // valor
+    total += GAP_APOS_VALOR(fontPt); // espaço após valor
   }
   return total;
 }
@@ -214,33 +234,39 @@ function renderizarConteudo(
   const itens = camposDoBloco(bloco);
   const lh = lineHeight(fontPt);
   const lblH = labelHeight(fontPt);
-  let cy = startY + lblH;
+  let cy = startY + lblH * 0.8; // baseline do primeiro label
 
   for (const it of itens) {
     if (it === "sep") {
-      if (cy + 2 > bottomLimit) return;
+      const sepY = cy - lh * 0.4;
+      if (sepY > bottomLimit) return;
       doc.setDrawColor(210);
       doc.setLineWidth(0.2);
-      doc.line(px, cy - lh * 0.3, px + innerW, cy - lh * 0.3);
-      cy += lh * 0.4 + 1;
+      doc.line(px, sepY, px + innerW, sepY);
+      cy += GAP_SEPARADOR(fontPt) - lh * 0.4;
       continue;
     }
     if (cy > bottomLimit) return;
+
     // Label em negrito
     doc.setFont("helvetica", "bold");
     doc.setFontSize(Math.max(7, fontPt - 2.5));
     doc.setTextColor(60);
     doc.text(it.label.toUpperCase(), px, cy);
-    cy += 0.6 + lh * 0.5;
+
+    // Avança até a baseline do valor (label inteiro abaixo + gap)
+    cy += GAP_LABEL_VALOR(fontPt) + lh * 0.85;
+
     // Valor
     doc.setFont("helvetica", "normal");
     doc.setFontSize(fontPt);
     doc.setTextColor(20);
-    const lines = doc.splitTextToSize(it.value, innerW);
-    const maxLines = Math.max(0, Math.floor((bottomLimit - cy) / lh));
+    const txt = quebrarPalavrasLongas(it.value);
+    const lines = doc.splitTextToSize(txt, innerW) as string[];
+    const maxLines = Math.max(0, Math.floor((bottomLimit - cy + lh) / lh));
     const used = lines.slice(0, maxLines);
     if (used.length === 0) return;
     doc.text(used, px, cy);
-    cy += used.length * lh + 1.2;
+    cy += (used.length - 1) * lh + GAP_APOS_VALOR(fontPt) + lh * 0.85;
   }
 }

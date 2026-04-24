@@ -1,15 +1,29 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Download, LogOut, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Download, LogOut, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { gerarPdfAgenda } from "@/lib/pdf";
-import { normalizarBloco, nomearArquivoPdf, type Bloco } from "@/lib/turmas";
+import { normalizarBloco, nomearArquivoPdf, TURMAS, type Bloco } from "@/lib/turmas";
 import logo from "@/assets/logo-colorida.png";
+
+interface DisciplinaRow {
+  id: string;
+  turma: string;
+  nome: string;
+}
 
 interface AgendaRow {
   id: string;
@@ -28,6 +42,54 @@ const Admin = () => {
   const [busy, setBusy] = useState(false);
   const [agendas, setAgendas] = useState<AgendaRow[]>([]);
   const [filtroTurma, setFiltroTurma] = useState("");
+  const [discTurma, setDiscTurma] = useState<string>(TURMAS[0].slug);
+  const [disciplinas, setDisciplinas] = useState<DisciplinaRow[]>([]);
+  const [novaDisc, setNovaDisc] = useState("");
+  const [salvandoDisc, setSalvandoDisc] = useState(false);
+
+  const carregarDisciplinas = async (turmaSlug: string) => {
+    const { data, error } = await supabase
+      .from("disciplinas")
+      .select("id, turma, nome")
+      .eq("turma", turmaSlug)
+      .order("nome");
+    if (error) {
+      toast.error("Erro ao carregar disciplinas");
+      return;
+    }
+    setDisciplinas((data ?? []) as DisciplinaRow[]);
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void carregarDisciplinas(discTurma);
+  }, [isAdmin, discTurma]);
+
+  const adicionarDisciplina = async () => {
+    const nome = novaDisc.trim();
+    if (!nome) return;
+    setSalvandoDisc(true);
+    const { error } = await supabase
+      .from("disciplinas")
+      .insert({ turma: discTurma, nome });
+    setSalvandoDisc(false);
+    if (error) {
+      toast.error(error.message.includes("duplicate") ? "Esta disciplina já existe" : "Erro ao adicionar");
+      return;
+    }
+    setNovaDisc("");
+    void carregarDisciplinas(discTurma);
+  };
+
+  const removerDisciplina = async (id: string) => {
+    if (!confirm("Remover esta disciplina?")) return;
+    const { error } = await supabase.from("disciplinas").delete().eq("id", id);
+    if (error) {
+      toast.error("Erro ao remover");
+      return;
+    }
+    void carregarDisciplinas(discTurma);
+  };
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
@@ -171,45 +233,120 @@ const Admin = () => {
           <img src={logo} alt="" className="h-12 w-auto" />
           <div>
             <h1 className="text-2xl font-bold">Painel administrativo</h1>
-            <p className="text-sm text-muted-foreground">Histórico de agendas enviadas</p>
+            <p className="text-sm text-muted-foreground">Gerencie agendas e disciplinas</p>
           </div>
         </div>
 
-        <Card className="p-4 mb-4">
-          <Label>Filtrar por turma</Label>
-          <Input
-            placeholder="Ex.: Infantil 3"
-            value={filtroTurma}
-            onChange={(e) => setFiltroTurma(e.target.value)}
-            className="mt-1 max-w-sm"
-          />
-        </Card>
+        <Tabs defaultValue="agendas" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="agendas">
+              <Download className="h-4 w-4" /> Agendas
+            </TabsTrigger>
+            <TabsTrigger value="disciplinas">
+              <BookOpen className="h-4 w-4" /> Disciplinas
+            </TabsTrigger>
+          </TabsList>
 
-        {filtradas.length === 0 ? (
-          <Card className="p-12 text-center text-muted-foreground">Nenhuma agenda encontrada.</Card>
-        ) : (
-          <div className="space-y-3">
-            {filtradas.map((a) => (
-              <Card key={a.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <div className="font-semibold">{a.turma}</div>
-                  <div className="text-sm text-muted-foreground">
-                    Semana de {new Date(a.semana_inicio + "T00:00:00").toLocaleDateString("pt-BR")} ·
-                    Enviada em {new Date(a.created_at).toLocaleString("pt-BR")}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => baixar(a)}>
-                    <Download className="h-4 w-4" /> PDF
+          <TabsContent value="agendas" className="space-y-4">
+            <Card className="p-4">
+              <Label>Filtrar por turma</Label>
+              <Input
+                placeholder="Ex.: Infantil 3"
+                value={filtroTurma}
+                onChange={(e) => setFiltroTurma(e.target.value)}
+                className="mt-1 max-w-sm"
+              />
+            </Card>
+
+            {filtradas.length === 0 ? (
+              <Card className="p-12 text-center text-muted-foreground">Nenhuma agenda encontrada.</Card>
+            ) : (
+              <div className="space-y-3">
+                {filtradas.map((a) => (
+                  <Card key={a.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{a.turma}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Semana de {new Date(a.semana_inicio + "T00:00:00").toLocaleDateString("pt-BR")} ·
+                        Enviada em {new Date(a.created_at).toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => baixar(a)}>
+                        <Download className="h-4 w-4" /> PDF
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => excluir(a.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="disciplinas" className="space-y-4">
+            <Card className="p-4 space-y-4">
+              <div>
+                <Label>Turma</Label>
+                <Select value={discTurma} onValueChange={setDiscTurma}>
+                  <SelectTrigger className="mt-1 max-w-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TURMAS.map((t) => (
+                      <SelectItem key={t.slug} value={t.slug}>
+                        {t.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Adicionar disciplina</Label>
+                <div className="mt-1 flex gap-2">
+                  <Input
+                    placeholder="Ex.: Linguagem"
+                    value={novaDisc}
+                    onChange={(e) => setNovaDisc(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void adicionarDisciplina();
+                      }
+                    }}
+                  />
+                  <Button onClick={adicionarDisciplina} disabled={salvandoDisc || !novaDisc.trim()}>
+                    <Plus className="h-4 w-4" /> Adicionar
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => excluir(a.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
+              </div>
+            </Card>
+
+            {disciplinas.length === 0 ? (
+              <Card className="p-8 text-center text-muted-foreground">
+                Nenhuma disciplina cadastrada para esta turma ainda.
               </Card>
-            ))}
-          </div>
-        )}
+            ) : (
+              <div className="space-y-2">
+                {disciplinas.map((d) => (
+                  <Card key={d.id} className="p-3 flex items-center justify-between">
+                    <span className="font-medium">{d.nome}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removerDisciplina(d.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

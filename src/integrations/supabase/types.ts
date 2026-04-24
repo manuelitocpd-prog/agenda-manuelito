@@ -38,6 +38,27 @@ export type Database = {
         }
         Relationships: []
       }
+      disciplinas: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          turma: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          turma: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          turma?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
